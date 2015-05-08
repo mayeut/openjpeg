@@ -295,6 +295,11 @@ OPJ_SIZE_T opj_stream_read_data (opj_stream_private_t * p_stream,OPJ_BYTE * p_bu
 	}
 
 	/* we are now in the case when the remaining data if not sufficient */
+	if (p_stream->m_own_data == 0) {
+		/* read only buffer stream */
+		opj_event_msg(p_event_mgr, EVT_INFO, "Stream reached its end !\n");
+		p_stream->m_status |= opj_stream_e_end;
+	}
 	if (p_stream->m_status & opj_stream_e_end) {
 		l_read_nb_bytes += p_stream->m_bytes_in_buffer;
 		memcpy(p_buffer,p_stream->m_current_data,p_stream->m_bytes_in_buffer);
@@ -400,6 +405,10 @@ OPJ_SIZE_T opj_stream_write_data (opj_stream_private_t * p_stream,
 	if (p_stream->m_status & opj_stream_e_error) {
 		return (OPJ_SIZE_T)-1;
 	}
+	if (p_stream->m_own_data == 0) {
+		/* read only buffer stream */
+		return (OPJ_SIZE_T)-1;
+	}
 
 	while(1) {
 		l_remaining_bytes = p_stream->m_buffer_size - p_stream->m_bytes_in_buffer;
@@ -442,6 +451,13 @@ OPJ_BOOL opj_stream_flush (opj_stream_private_t * p_stream, opj_event_mgr_t * p_
 	/* the number of bytes written on the media. */
 	OPJ_SIZE_T l_current_write_nb_bytes = 0;
 
+	if (p_stream->m_own_data == 0) {
+		/* read only buffer stream */
+		p_stream->m_status |= opj_stream_e_error;
+		opj_event_msg(p_event_mgr, EVT_INFO, "Error on writing readonly stream!\n");
+		return OPJ_FALSE;
+	}
+	
 	p_stream->m_current_data = p_stream->m_stored_data;
 
 	while (p_stream->m_bytes_in_buffer) {
@@ -525,7 +541,7 @@ OPJ_OFF_T opj_stream_write_skip (opj_stream_private_t * p_stream, OPJ_OFF_T p_si
 	OPJ_BOOL l_is_written = 0;
 	OPJ_OFF_T l_current_skip_nb_bytes = 0;
 	OPJ_OFF_T l_skip_nb_bytes = 0;
-
+	
 	if (p_stream->m_status & opj_stream_e_error) {
 		return (OPJ_OFF_T) -1;
 	}

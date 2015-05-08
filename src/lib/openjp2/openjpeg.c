@@ -7,6 +7,7 @@
  * Copyright (c) 2005, Herve Drolon, FreeImage Team
  * Copyright (c) 2008, 2011-2012, Centre National d'Etudes Spatiales (CNES), FR 
  * Copyright (c) 2012, CS Systemes d'Information, France
+ * Copyright (c) 2015, Matthieu Darbois
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -963,10 +964,13 @@ opj_stream_t* OPJ_CALLCONV opj_stream_create_file_stream (
 
 static OPJ_OFF_T opj_skip_from_buffer (OPJ_OFF_T p_nb_bytes, void * p_user_data)
 {
+	OPJ_ARG_NOT_USED(p_user_data);
 	return p_nb_bytes;
 }
 static OPJ_BOOL opj_seek_from_buffer (OPJ_OFF_T p_nb_bytes, void * p_user_data)
 {
+	OPJ_ARG_NOT_USED(p_nb_bytes);
+	OPJ_ARG_NOT_USED(p_user_data);
 	return OPJ_FALSE;
 }
 
@@ -977,6 +981,7 @@ opj_stream_t* OPJ_CALLCONV opj_stream_create_input_memory_stream (const OPJ_BYTE
 	l_stream = opj_stream_create_internal(p_data, p_data_size, OPJ_TRUE);
 	
 	if (l_stream) {
+		opj_stream_set_user_data_length(l_stream, p_data_size);
 		opj_stream_set_skip_function(l_stream, opj_skip_from_buffer);
 		opj_stream_set_seek_function(l_stream, opj_seek_from_buffer);
 	}
