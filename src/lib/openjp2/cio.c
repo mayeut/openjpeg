@@ -590,7 +590,7 @@ OPJ_BOOL opj_stream_read_seek (opj_stream_private_t * p_stream, OPJ_OFF_T p_size
 	l_buffer_end = p_stream->m_byte_offset + p_stream->m_bytes_in_buffer;
 	
 	if ((l_buffer_start <= p_size) && (l_buffer_end >= p_size))
-  {
+	{
 		/* We have what we need in buffer */
 		OPJ_OFF_T l_offset = p_size - p_stream->m_byte_offset;
 		
