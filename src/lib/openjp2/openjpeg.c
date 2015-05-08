@@ -960,3 +960,26 @@ opj_stream_t* OPJ_CALLCONV opj_stream_create_file_stream (
 
     return l_stream;
 }
+
+static OPJ_OFF_T opj_skip_from_buffer (OPJ_OFF_T p_nb_bytes, void * p_user_data)
+{
+	return p_nb_bytes;
+}
+static OPJ_BOOL opj_seek_from_buffer (OPJ_OFF_T p_nb_bytes, void * p_user_data)
+{
+	return OPJ_FALSE;
+}
+
+opj_stream_t* OPJ_CALLCONV opj_stream_create_input_memory_stream (const OPJ_BYTE* p_data, OPJ_SIZE_T p_data_size)
+{
+	opj_stream_t* l_stream = 00;
+	
+	l_stream = opj_stream_create_internal(p_data, p_data_size, OPJ_TRUE);
+	
+	if (l_stream) {
+		opj_stream_set_skip_function(l_stream, opj_skip_from_buffer);
+		opj_stream_set_seek_function(l_stream, opj_seek_from_buffer);
+	}
+	
+	return l_stream;
+}

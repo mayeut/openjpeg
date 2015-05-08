@@ -41,12 +41,6 @@
 #include "opj_includes.h"
 
 /* ----------------------------------------------------------------------- */
-/* Declarations                                                            */
-/* ----------------------------------------------------------------------- */
-
-static opj_stream_t* opj_stream_create_private(const void * p_data, OPJ_SIZE_T p_buffer_size, OPJ_BOOL l_is_input);
-
-/* ----------------------------------------------------------------------- */
 
 void opj_write_bytes_BE (OPJ_BYTE * p_buffer, OPJ_UINT32 p_value, OPJ_UINT32 p_nb_bytes)
 {
@@ -152,7 +146,7 @@ void opj_read_float_LE(const OPJ_BYTE * p_buffer, OPJ_FLOAT32 * p_value)
 	}
 }
 
-static opj_stream_t* opj_stream_create_private(const void * p_data, OPJ_SIZE_T p_buffer_size, OPJ_BOOL l_is_input)
+opj_stream_t* opj_stream_create_internal(const void * p_data, OPJ_SIZE_T p_buffer_size, OPJ_BOOL p_is_input)
 {
 	opj_stream_private_t * l_stream = 00;
 	l_stream = (opj_stream_private_t*) opj_calloc(1,sizeof(opj_stream_private_t));
@@ -171,7 +165,7 @@ static opj_stream_t* opj_stream_create_private(const void * p_data, OPJ_SIZE_T p
 		}
 	} else {
 		/* We're using user-provided data for input stream */
-		if (! l_is_input) {
+		if (! p_is_input) {
 			opj_free(l_stream);
 			return 00;
 		}
@@ -183,7 +177,7 @@ static opj_stream_t* opj_stream_create_private(const void * p_data, OPJ_SIZE_T p
 
 	l_stream->m_current_data = l_stream->m_stored_data;
 
-	if (l_is_input) {
+	if (p_is_input) {
 		l_stream->m_status |= opj_stream_e_input;
 		l_stream->m_opj_skip = opj_stream_read_skip;
 		l_stream->m_opj_seek = opj_stream_read_seek;
@@ -202,14 +196,9 @@ static opj_stream_t* opj_stream_create_private(const void * p_data, OPJ_SIZE_T p
 	return (opj_stream_t *) l_stream;
 }
 
-opj_stream_t* OPJ_CALLCONV opj_stream_create_input_memory_stream (const OPJ_BYTE* p_data, OPJ_SIZE_T p_data_size)
-{
-	return opj_stream_create_private(p_data, p_data_size, OPJ_TRUE);
-}
-
 opj_stream_t* OPJ_CALLCONV opj_stream_create(OPJ_SIZE_T p_buffer_size,OPJ_BOOL l_is_input)
 {
-	return opj_stream_create_private(NULL, p_buffer_size, l_is_input);
+	return opj_stream_create_internal(NULL, p_buffer_size, l_is_input);
 }
 
 opj_stream_t* OPJ_CALLCONV opj_stream_default_create(OPJ_BOOL l_is_input)
@@ -593,20 +582,32 @@ OPJ_OFF_T opj_stream_skip (opj_stream_private_t * p_stream, OPJ_OFF_T p_size, op
 
 OPJ_BOOL opj_stream_read_seek (opj_stream_private_t * p_stream, OPJ_OFF_T p_size, opj_event_mgr_t * p_event_mgr)
 {
+	OPJ_OFF_T l_buffer_start, l_buffer_end;
+	
 	OPJ_ARG_NOT_USED(p_event_mgr);
-	p_stream->m_current_data = p_stream->m_stored_data;
-	p_stream->m_bytes_in_buffer = 0;
+	
+	l_buffer_start = p_stream->m_byte_offset - (OPJ_OFF_T)(p_stream->m_buffer_size - (OPJ_SIZE_T)p_stream->m_bytes_in_buffer);
+	l_buffer_end = p_stream->m_byte_offset + p_stream->m_bytes_in_buffer;
+	
+	if ((l_buffer_start <= p_size) && (l_buffer_end >= p_size))
+  {
+		/* We have what we need in buffer */
+		OPJ_OFF_T l_offset = p_size - p_stream->m_byte_offset;
+		
+		p_stream->m_current_data    += l_offset;
+		p_stream->m_bytes_in_buffer -= l_offset;
+	} else {
+		p_stream->m_current_data = p_stream->m_stored_data;
+		p_stream->m_bytes_in_buffer = 0;
 
-	if( !(p_stream->m_seek_fn(p_size,p_stream->m_user_data)) ) {
-		p_stream->m_status |= opj_stream_e_end;
-		return OPJ_FALSE;
+		if( !(p_stream->m_seek_fn(p_size,p_stream->m_user_data)) ) {
+			p_stream->m_status |= opj_stream_e_end;
+			return OPJ_FALSE;
+		}
 	}
-	else {
-		/* reset stream status */
-		p_stream->m_status &= (~opj_stream_e_end);
-		p_stream->m_byte_offset = p_size;
-
-	}
+	/* reset stream status */
+	p_stream->m_status &= (~opj_stream_e_end);
+	p_stream->m_byte_offset = p_size;
 
 	return OPJ_TRUE;
 }

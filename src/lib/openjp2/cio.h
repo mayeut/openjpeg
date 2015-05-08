@@ -178,6 +178,15 @@ opj_stream_private_t;
 /*@{*/
 /* ----------------------------------------------------------------------- */
 /**
+ * Creates an abstract stream. This function does nothing except allocating memory and initializing the abstract stream.
+ * @param p_data        pointer to the data buffer to read from (can be NULL).
+ * @param p_buffer_size	Size of of #p_data or, if #p_data is NULL, size of the buffer to allocate for stream operations.
+ * @param p_is_input    if set to true then the stream will be an input stream, an output stream else.
+ */
+
+opj_stream_t* opj_stream_create_internal(const void * p_data, OPJ_SIZE_T p_buffer_size, OPJ_BOOL p_is_input);
+
+/**
  * Write some bytes to the given data buffer, this function is used in Big Endian cpus.
  * @param p_buffer		pointer the data buffer to write data to.
  * @param p_value		the value to write
