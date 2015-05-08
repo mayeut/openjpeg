@@ -13,6 +13,7 @@
  * Copyright (c) 2005, Herve Drolon, FreeImage Team
  * Copyright (c) 2008, 2011-2012, Centre National d'Etudes Spatiales (CNES), FR 
  * Copyright (c) 2012, CS Systemes d'Information, France
+ * Copyright (c) 2015, Matthieu Darbois
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -40,7 +41,10 @@
 #include "opj_includes.h"
 
 /* ----------------------------------------------------------------------- */
+/* Declarations                                                            */
+/* ----------------------------------------------------------------------- */
 
+static opj_stream_t* opj_stream_create_private(const void * p_data, OPJ_SIZE_T p_buffer_size, OPJ_BOOL l_is_input);
 
 /* ----------------------------------------------------------------------- */
 
@@ -148,7 +152,7 @@ void opj_read_float_LE(const OPJ_BYTE * p_buffer, OPJ_FLOAT32 * p_value)
 	}
 }
 
-opj_stream_t* OPJ_CALLCONV opj_stream_create(OPJ_SIZE_T p_buffer_size,OPJ_BOOL l_is_input)
+static opj_stream_t* opj_stream_create_private(const void * p_data, OPJ_SIZE_T p_buffer_size, OPJ_BOOL l_is_input)
 {
 	opj_stream_private_t * l_stream = 00;
 	l_stream = (opj_stream_private_t*) opj_calloc(1,sizeof(opj_stream_private_t));
@@ -158,10 +162,24 @@ opj_stream_t* OPJ_CALLCONV opj_stream_create(OPJ_SIZE_T p_buffer_size,OPJ_BOOL l
 
 	l_stream->m_buffer_size = p_buffer_size;
 	l_stream->m_stored_data = (OPJ_BYTE *) opj_malloc(p_buffer_size);
-	if (! l_stream->m_stored_data) {
-		opj_free(l_stream);
-		return 00;
-	}
+	if (p_data == NULL) {
+		l_stream->m_own_data = OPJ_TRUE;
+		l_stream->m_stored_data = (OPJ_BYTE *) opj_malloc(p_buffer_size);
+		if (! l_stream->m_stored_data) {
+			opj_free(l_stream);
+			return 00;
+		}
+	} else {
+		/* We're using user-provided data for input stream */
+		if (! l_is_input) {
+			opj_free(l_stream);
+			return 00;
+		}
+		l_stream->m_own_data = OPJ_FALSE;
+		l_stream->m_stored_data = (OPJ_BYTE *)p_data; /* FIXME We are losing the const qualifier */
+		l_stream->m_bytes_in_buffer = p_buffer_size;
+		l_stream->m_user_data_length = p_buffer_size;
+ 	}
 
 	l_stream->m_current_data = l_stream->m_stored_data;
 
@@ -184,6 +202,16 @@ opj_stream_t* OPJ_CALLCONV opj_stream_create(OPJ_SIZE_T p_buffer_size,OPJ_BOOL l
 	return (opj_stream_t *) l_stream;
 }
 
+opj_stream_t* OPJ_CALLCONV opj_stream_create_input_memory_stream (const OPJ_BYTE* p_data, OPJ_SIZE_T p_data_size)
+{
+	return opj_stream_create_private(p_data, p_data_size, OPJ_TRUE);
+}
+
+opj_stream_t* OPJ_CALLCONV opj_stream_create(OPJ_SIZE_T p_buffer_size,OPJ_BOOL l_is_input)
+{
+	return opj_stream_create_private(NULL, p_buffer_size, l_is_input);
+}
+
 opj_stream_t* OPJ_CALLCONV opj_stream_default_create(OPJ_BOOL l_is_input)
 {
 	return opj_stream_create(OPJ_J2K_STREAM_CHUNK_SIZE,l_is_input);
@@ -197,7 +225,9 @@ void OPJ_CALLCONV opj_stream_destroy(opj_stream_t* p_stream)
 		if (l_stream->m_free_user_data_fn) {
 			l_stream->m_free_user_data_fn(l_stream->m_user_data);
 		}
-		opj_free(l_stream->m_stored_data);
+		if (l_stream->m_own_data) {
+			opj_free(l_stream->m_stored_data);
+		}
 		l_stream->m_stored_data = 00;
 		opj_free(l_stream);
 	}

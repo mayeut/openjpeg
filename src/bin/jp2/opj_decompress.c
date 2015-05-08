@@ -14,6 +14,7 @@
  * Copyright (c) 2006-2007, Parvatha Elangovan
  * Copyright (c) 2008, 2011-2012, Centre National d'Etudes Spatiales (CNES), FR 
  * Copyright (c) 2012, CS Systemes d'Information, France
+ * Copyright (c) 2015, Matthieu Darbois
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -72,6 +73,40 @@
 #include "color.h"
 
 #include "format_defs.h"
+
+
+/*
+ Use fseeko() and ftello() if they are available since they use
+ 'off_t' rather than 'long'.  It is wrong to use fseeko() and
+ ftello() only on systems with special LFS support since some systems
+ (e.g. FreeBSD) support a 64-bit off_t by default.
+ */
+#if defined(OPJ_HAVE_FSEEKO) && !defined(fseek)
+#  define fseek  fseeko
+#  define ftell  ftello
+#endif
+
+
+#if defined(WIN32) && !defined(Windows95) && !defined(__BORLANDC__) && \
+!(defined(_MSC_VER) && _MSC_VER < 1400) && \
+!(defined(__MINGW32__) && __MSVCRT_VERSION__ < 0x800)
+/*
+ Windows '95 and Borland C do not support _lseeki64
+ Visual Studio does not support _fseeki64 and _ftelli64 until the 2005 release.
+ Without these interfaces, files over 2GB in size are not supported for Windows.
+ */
+#  define OPJ_FSEEK(stream,offset,whence) _fseeki64(stream,/* __int64 */ offset,whence)
+#  define OPJ_FSTAT(fildes,stat_buff) _fstati64(fildes,/* struct _stati64 */ stat_buff)
+#  define OPJ_FTELL(stream) /* __int64 */ _ftelli64(stream)
+#  define OPJ_STAT_STRUCT_T struct _stati64
+#  define OPJ_STAT(path,stat_buff) _stati64(path,/* struct _stati64 */ stat_buff)
+#else
+#  define OPJ_FSEEK(stream,offset,whence) fseek(stream,offset,whence)
+#  define OPJ_FSTAT(fildes,stat_buff) fstat(fildes,stat_buff)
+#  define OPJ_FTELL(stream) ftell(stream)
+#  define OPJ_STAT_STRUCT_T struct stat
+#  define OPJ_STAT(path,stat_buff) stat(path,stat_buff)
+#endif
 
 typedef struct dircnt{
 	/** Buffer for holding images read from Directory*/
@@ -142,6 +177,8 @@ typedef struct opj_decompress_params
 	int force_rgb;
 	/* upsample components according to their dx/dy values */
 	int upsample;
+	/* use memory stream */
+	int use_memory_stream;
 }opj_decompress_parameters;
 
 /* -------------------------------------------------------------------------- */
@@ -215,6 +252,8 @@ static void decode_help_display(void) {
 	               "    Force output image colorspace to RGB\n"
 	               "  -upsample\n"
 	               "    Downsampled components will be upsampled to image size\n"
+	               "  -use-memory-stream\n"
+	               "    Use memory stream instead of file stream\n"
 	               "\n");
 /* UniPG>> */
 #ifdef USE_JPWL
@@ -503,7 +542,8 @@ int parse_cmdline_decoder(int argc, char **argv, opj_decompress_parameters *para
 		{"ImgDir",    REQ_ARG, NULL ,'y'},
 		{"OutFor",    REQ_ARG, NULL ,'O'},
 		{"force-rgb", NO_ARG,  &(parameters->force_rgb), 1},
-		{"upsample",  NO_ARG,  &(parameters->upsample),  1}
+		{"upsample",  NO_ARG,  &(parameters->upsample),  1},
+		{"use-memory-stream", NO_ARG,  &(parameters->use_memory_stream), 1}
 	};
 
 	const char optlist[] = "i:o:r:l:x:d:t:p:"
@@ -1117,6 +1157,41 @@ static opj_image_t* upsample_image_components(opj_image_t* original)
 }
 
 /* -------------------------------------------------------------------------- */
+
+static OPJ_BYTE* read_buffer(const char* infile, OPJ_SIZE_T* p_data_size)
+{
+	OPJ_BYTE* l_result = NULL;
+	FILE* l_file = NULL;
+	
+	if ((infile == NULL) || (p_data_size == NULL)) {
+		return NULL;
+	}
+	
+	l_file = fopen(infile, "rb");
+	if (l_file != NULL) {
+		OPJ_OFF_T file_length = 0;
+		
+		OPJ_FSEEK(l_file, 0, SEEK_END);
+		file_length = (OPJ_OFF_T)OPJ_FTELL(l_file);
+		OPJ_FSEEK(l_file, 0, SEEK_SET);
+		
+		if ((file_length > 0) && ((OPJ_UINT64)file_length <= (OPJ_UINT64)((OPJ_SIZE_T)((OPJ_INT64)-1)))) {
+			*p_data_size = (OPJ_SIZE_T)file_length;
+			
+			l_result = (OPJ_BYTE*)malloc((size_t)*p_data_size);
+			if (l_result != NULL) {
+				if (fread(l_result, 1U, (size_t)*p_data_size, l_file) != (size_t)*p_data_size) {
+					free(l_result);
+					l_result = NULL;
+				}
+			}
+		}
+		fclose(l_file);
+	}
+	return l_result;
+}
+
+/* -------------------------------------------------------------------------- */
 /**
  * OPJ_DECOMPRESS MAIN
  */
@@ -1126,6 +1201,7 @@ int main(int argc, char **argv)
 	opj_decompress_parameters parameters;			/* decompression parameters */
 	opj_image_t* image = NULL;
 	opj_stream_t *l_stream = NULL;				/* Stream */
+	OPJ_BYTE* l_input_buffer = NULL;
 	opj_codec_t* l_codec = NULL;				/* Handle to a decompressor */
 	opj_codestream_index_t* cstr_index = NULL;
 
@@ -1149,6 +1225,9 @@ int main(int argc, char **argv)
 	if(parse_cmdline_decoder(argc, argv, &parameters,&img_fol, indexfilename) == 1) {
 		destroy_parameters(&parameters);
 		return EXIT_FAILURE;
+	}
+	if (getenv("OPJ_USE_MEMORY_STREAM") != NULL) {
+		parameters.use_memory_stream = 1;
 	}
 
 	/* Initialize reading of directory */
@@ -1198,10 +1277,22 @@ int main(int argc, char **argv)
 		/* read the input file and put it in memory */
 		/* ---------------------------------------- */
 
-		l_stream = opj_stream_create_default_file_stream(parameters.infile,1);
+		if (parameters.use_memory_stream != 0) {
+			OPJ_SIZE_T l_data_size = 0U;
+			l_input_buffer = read_buffer(parameters.infile, &l_data_size);
+			if (!l_input_buffer){
+				fprintf(stderr, "ERROR -> failed to read file %s\n", parameters.infile);
+				destroy_parameters(&parameters);
+				return EXIT_FAILURE;
+			}
+			l_stream = opj_stream_create_input_memory_stream(l_input_buffer, l_data_size);
+		} else {
+			l_stream = opj_stream_create_default_file_stream(parameters.infile,1);
+		}
 		if (!l_stream){
 			fprintf(stderr, "ERROR -> failed to create the stream from the file %s\n", parameters.infile);
 			destroy_parameters(&parameters);
+			if (l_input_buffer != NULL) free(l_input_buffer);
 			return EXIT_FAILURE;
 		}
 
@@ -1231,6 +1322,7 @@ int main(int argc, char **argv)
 				fprintf(stderr, "skipping file..\n");
 				destroy_parameters(&parameters);
 				opj_stream_destroy(l_stream);
+				if (l_input_buffer != NULL) free(l_input_buffer);
 				continue;
 		}
 
@@ -1245,6 +1337,7 @@ int main(int argc, char **argv)
 			destroy_parameters(&parameters);
 			opj_stream_destroy(l_stream);
 			opj_destroy_codec(l_codec);
+			if (l_input_buffer != NULL) free(l_input_buffer);
 			return EXIT_FAILURE;
 		}
 
@@ -1256,6 +1349,7 @@ int main(int argc, char **argv)
 			opj_stream_destroy(l_stream);
 			opj_destroy_codec(l_codec);
 			opj_image_destroy(image);
+			if (l_input_buffer != NULL) free(l_input_buffer);
 			return EXIT_FAILURE;
 		}
 
@@ -1268,6 +1362,7 @@ int main(int argc, char **argv)
 				opj_stream_destroy(l_stream);
 				opj_destroy_codec(l_codec);
 				opj_image_destroy(image);
+				if (l_input_buffer != NULL) free(l_input_buffer);
 				return EXIT_FAILURE;
 			}
 
@@ -1278,6 +1373,7 @@ int main(int argc, char **argv)
 				opj_destroy_codec(l_codec);
 				opj_stream_destroy(l_stream);
 				opj_image_destroy(image);
+				if (l_input_buffer != NULL) free(l_input_buffer);
 				return EXIT_FAILURE;
 			}
 		}
@@ -1298,6 +1394,7 @@ int main(int argc, char **argv)
 				opj_destroy_codec(l_codec);
 				opj_stream_destroy(l_stream);
 				opj_image_destroy(image);
+				if (l_input_buffer != NULL) free(l_input_buffer);
 				return EXIT_FAILURE;
 			}
 			fprintf(stdout, "tile %d is decoded!\n\n", parameters.tile_index);
@@ -1305,6 +1402,10 @@ int main(int argc, char **argv)
 
 		/* Close the byte stream */
 		opj_stream_destroy(l_stream);
+		if (l_input_buffer != NULL) {
+			free(l_input_buffer);
+			l_input_buffer = NULL;
+		}
 
 		if(image->color_space == OPJ_CLRSPC_SYCC){
 			color_sycc_to_rgb(image); /* FIXME */

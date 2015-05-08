@@ -13,6 +13,7 @@
  * Copyright (c) 2005, Herve Drolon, FreeImage Team
  * Copyright (c) 2008, 2011-2012, Centre National d'Etudes Spatiales (CNES), FR 
  * Copyright (c) 2012, CS Systemes d'Information, France
+ * Copyright (c) 2015, Matthieu Darbois
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -164,6 +165,11 @@ typedef struct opj_stream_private
 	 * Flags to tell the status of the stream.
 	 */
 	opj_stream_flag m_status;
+	
+	/**
+	* Tells if m_stored_data is owned by this stream (true) or the user (false)
+	*/
+	OPJ_BOOL m_own_data;
 
 }
 opj_stream_private_t;

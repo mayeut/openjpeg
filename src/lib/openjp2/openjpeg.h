@@ -16,6 +16,7 @@
  * Copyright (c) 2010-2011, Kaori Hagihara
  * Copyright (c) 2011-2012, Centre National d'Etudes Spatiales (CNES), France 
  * Copyright (c) 2012, CS Systemes d'Information, France
+ * Copyright (c) 2015, Matthieu Darbois
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1180,7 +1181,14 @@ OPJ_API opj_stream_t* OPJ_CALLCONV opj_stream_create_default_file_stream (const 
 OPJ_API opj_stream_t* OPJ_CALLCONV opj_stream_create_file_stream (const char *fname,
                                                                      OPJ_SIZE_T p_buffer_size,
                                                                      OPJ_BOOL p_is_read_stream);
- 
+
+/**
+ * Create a input memory stream from a memory block (helper function)
+ * @param p_data      the data block to stream
+ * @param p_data_size the data block size
+*/
+OPJ_API opj_stream_t* OPJ_CALLCONV opj_stream_create_input_memory_stream (const OPJ_BYTE* p_data, OPJ_SIZE_T p_data_size);
+	
 /* 
 ==========================================================
    event manager functions definitions
