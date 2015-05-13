@@ -469,12 +469,12 @@ static void opj_jp2_setup_header_reading (opj_jp2_t *jp2);
 	opj_read_bytes(l_data_header+4,&(box->type), 4);
     
   if(box->length == 0)/* last box */
-    {
+	{
     const OPJ_OFF_T bleft = opj_stream_get_number_byte_left(cio);
     box->length = (OPJ_UINT32)bleft;
     assert( (OPJ_OFF_T)box->length == bleft );
     return OPJ_TRUE;
-    }
+	}
 
 	/* do we have a "special very large box ?" */
 	/* read then the XLBox */
@@ -486,11 +486,10 @@ static void opj_jp2_setup_header_reading (opj_jp2_t *jp2);
 			if (l_nb_bytes_read > 0) {
 				*p_number_bytes_read += l_nb_bytes_read;
 			}
-
 			return OPJ_FALSE;
 		}
 
-        *p_number_bytes_read = 16;
+		*p_number_bytes_read = 16;
 		opj_read_bytes(l_data_header,&l_xl_part_size, 4);
 		if (l_xl_part_size != 0) {
 			opj_event_msg(p_manager, EVT_ERROR, "Cannot handle box sizes higher than 2^32\n");
@@ -498,7 +497,7 @@ static void opj_jp2_setup_header_reading (opj_jp2_t *jp2);
 		}
 		opj_read_bytes(l_data_header+4,&(box->length), 4);
 	}
-    return OPJ_TRUE;
+	return OPJ_TRUE;
 }
 
 #if 0
