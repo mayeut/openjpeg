@@ -2011,7 +2011,7 @@ OPJ_BOOL opj_jp2_read_header_procedure(  opj_jp2_t *jp2,
 		if (box.type == JP2_JP2C) {
 			if (jp2->jp2_state & JP2_STATE_HEADER) {
 				jp2->jp2_state |= JP2_STATE_CODESTREAM;
-                                opj_free(l_current_data);
+				opj_free(l_current_data);
 				return OPJ_TRUE;
 			}
 			else {
@@ -2046,17 +2046,17 @@ OPJ_BOOL opj_jp2_read_header_procedure(  opj_jp2_t *jp2,
 				OPJ_BYTE* new_current_data = (OPJ_BYTE*)opj_realloc(l_current_data,l_current_data_size);
 				if (!new_current_data) {
 					opj_free(l_current_data);
-                    opj_event_msg(p_manager, EVT_ERROR, "Not enough memory to handle jpeg2000 box\n");
+					opj_event_msg(p_manager, EVT_ERROR, "Not enough memory to handle jpeg2000 box\n");
 					return OPJ_FALSE;
 				}
-                l_current_data = new_current_data;
+				l_current_data = new_current_data;
 				l_last_data_size = l_current_data_size;
 			}
 
 			l_nb_bytes_read = (OPJ_UINT32)opj_stream_read_data(stream,l_current_data,l_current_data_size,p_manager);
 			if (l_nb_bytes_read != l_current_data_size) {
 				opj_event_msg(p_manager, EVT_ERROR, "Problem with reading JPEG2000 box, stream error\n");
-                opj_free(l_current_data);                
+				opj_free(l_current_data);
 				return OPJ_FALSE;
 			}
 
