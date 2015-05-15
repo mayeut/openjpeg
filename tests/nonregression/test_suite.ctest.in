@@ -261,6 +261,9 @@ opj_decompress -i @INPUT_NR_PATH@/issue411-ycc420.jp2 -o @TEMP_PATH@/issue411-yc
 # issue 458 component precision upscaling
 opj_decompress -i @INPUT_NR_PATH@/issue458.jp2 -o @TEMP_PATH@/issue458.jp2.pgx
 
+# Add test for input memory stream. The following tests are the one failing with default implementation
+opj_decompress -i @INPUT_NR_PATH@/issue412.jp2 -o @TEMP_PATH@/issue428_1.jp2.pgx -t 0 -use-memory-stream
+opj_decompress -i @INPUT_NR_PATH@/issue254.jp2 -o @TEMP_PATH@/issue254_1.jp2.pgx -use-memory-stream
 
 # decode with specific area
 # prec=12; nb_c=1 

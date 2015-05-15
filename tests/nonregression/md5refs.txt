@@ -50,6 +50,9 @@ e1807db57b5f5192c4b77b83e8b5c477  issue228.j2k_0.pgx
 cccccccccccccccccccccccccccccccc  issue254.jp2_0.pgx
 cccccccccccccccccccccccccccccccc  issue254.jp2_1.pgx
 cccccccccccccccccccccccccccccccc  issue254.jp2_2.pgx
+cccccccccccccccccccccccccccccccc  issue254_1.jp2_0.pgx
+cccccccccccccccccccccccccccccccc  issue254_1.jp2_1.pgx
+cccccccccccccccccccccccccccccccc  issue254_1.jp2_2.pgx
 4093cc34d838780b35a8be410247fa7f  j2k32.j2k_0.pgx
 ce4e556aaa0844b92a92c35c200fc43e  j2k32.j2k_1.pgx
 ea926520f990640862f3fe6616097613  j2k32.j2k_2.pgx
@@ -156,10 +159,13 @@ fc2173be54954a146b4e2887ee14be06  text_GBR.jp2_1.pgx
 14108b4fb8d9126750db0424417ed17d  text_GBR.jp2_2.pgx
 a73bec4d6d82c8a64203e8fdf893b86d  issue412.jp2_0.pgx
 a73bec4d6d82c8a64203e8fdf893b86d  issue428.jp2_0.pgx
+a73bec4d6d82c8a64203e8fdf893b86d  issue428_1.jp2_0.pgx
 2354cf24a1cc5e4a3b72896b333ba361  issue412.jp2_1.pgx
 2354cf24a1cc5e4a3b72896b333ba361  issue428.jp2_1.pgx
+2354cf24a1cc5e4a3b72896b333ba361  issue428_1.jp2_1.pgx
 77d707ff949371e561e13a8d720108b5  issue412.jp2_2.pgx
 77d707ff949371e561e13a8d720108b5  issue428.jp2_2.pgx
+77d707ff949371e561e13a8d720108b5  issue428_1.jp2_2.pgx
 2fc600f30ec0bc013befb1874e7adaeb  issue414.jp2_0.pgx
 354f9bb4668717d5c814cda354ec2b43  issue414.jp2_1.pgx
 8b96a253937c4c7dd6b41b4aa11367d9  issue414.jp2_2.pgx
