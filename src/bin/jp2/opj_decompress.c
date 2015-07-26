@@ -57,6 +57,9 @@
 #define strncasecmp _strnicmp
 #else
 #include <strings.h>
+#include <sys/time.h>
+#include <sys/resource.h>
+#include <sys/times.h>
 #endif /* _WIN32 */
 
 #include "openjpeg.h"
@@ -177,6 +180,10 @@ typedef struct opj_decompress_params
 	int force_rgb;
 	/* upsample components according to their dx/dy values */
 	int upsample;
+
+	/* split output components to different files */
+	int split_pnm;
+	
 	/* use memory stream */
 	int use_memory_stream;
 }opj_decompress_parameters;
@@ -207,12 +214,12 @@ static void decode_help_display(void) {
 	               "	Image file Directory path \n"
 	               "  -OutFor <PBM|PGM|PPM|PNM|PAM|PGX|PNG|BMP|TIF|RAW|RAWL|TGA>\n"
 	               "    REQUIRED only if -ImgDir is used\n"
-	               "	Output format for decompressed images.\n"
-	               "  -i <compressed file>\n"
+	               "	Output format for decompressed images.\n");
+	fprintf(stdout,"  -i <compressed file>\n"
 	               "    REQUIRED only if an Input image directory is not specified\n"
 	               "    Currently accepts J2K-files, JP2-files and JPT-files. The file type\n"
-	               "    is identified based on its suffix.\n"
-	               "  -o <decompressed file>\n"
+	               "    is identified based on its suffix.\n");
+	fprintf(stdout,"  -o <decompressed file>\n"
 	               "    REQUIRED\n"
 	               "    Currently accepts formats specified above (see OutFor option)\n"
 	               "    Binary data is written to the file (not ascii). If a PGX\n"
@@ -220,8 +227,8 @@ static void decode_help_display(void) {
 	               "    components: an indice starting from 0 will then be appended to the\n"
 	               "    output filename, just before the \"pgx\" extension. If a PGM filename\n"
 	               "    is given and there are more than one component, only the first component\n"
-	               "    will be written to the file.\n"
-	               "  -r <reduce factor>\n"
+	               "    will be written to the file.\n");
+	fprintf(stdout,"  -r <reduce factor>\n"
 	               "    Set the number of highest resolution levels to be discarded. The\n"
 	               "    image resolution is effectively divided by 2 to the power of the\n"
 	               "    number of discarded levels. The reduce factor is limited by the\n"
@@ -229,8 +236,8 @@ static void decode_help_display(void) {
 	               "  -l <number of quality layers to decode>\n"
 	               "    Set the maximum number of quality layers to decode. If there are\n"
 	               "    less quality layers than the specified number, all the quality layers\n"
-	               "    are decoded.\n"
-	               "  -x  \n" 
+	               "    are decoded.\n");
+	fprintf(stdout,"  -x  \n"
 	               "    Create an index file *.Idx (-x index_name.Idx) \n"
 	               "  -d <x0,y0,x1,y1>\n"
 	               "    OPTIONAL\n"
@@ -239,21 +246,23 @@ static void decode_help_display(void) {
 	               "  -t <tile_number>\n"
 	               "    OPTIONAL\n"
 	               "    Set the tile number of the decoded tile. Follow the JPEG2000 convention from left-up to bottom-up\n"
-	               "    By default all tiles are decoded.\n"
-	               "  -p <comp 0 precision>[C|S][,<comp 1 precision>[C|S][,...]]\n"
+	               "    By default all tiles are decoded.\n");
+	fprintf(stdout,"  -p <comp 0 precision>[C|S][,<comp 1 precision>[C|S][,...]]\n"
 	               "    OPTIONAL\n"
-	               "    Force the precision (bit depth) of components.\n"
-	               "    There shall be at least 1 value. Theres no limit on the number of values (comma separated, last values ignored if too much values).\n"
+	               "    Force the precision (bit depth) of components.\n");
+	fprintf(stdout,"    There shall be at least 1 value. Theres no limit on the number of values (comma separated, last values ignored if too much values).\n"
 	               "    If there are less values than components, the last value is used for remaining components.\n"
 	               "    If 'C' is specified (default), values are clipped.\n"
 	               "    If 'S' is specified, values are scaled.\n"
-	               "    A 0 value can be specified (meaning original bit depth).\n"
-	               "  -force-rgb\n"
+	               "    A 0 value can be specified (meaning original bit depth).\n");
+	fprintf(stdout,"  -force-rgb\n"
 	               "    Force output image colorspace to RGB\n"
 	               "  -upsample\n"
-	               "    Downsampled components will be upsampled to image size\n"
-	               "  -use-memory-stream\n"
+	               "    Downsampled components will be upsampled to image size\n");
+	fprintf(stdout,"  -use-memory-stream\n"
 	               "    Use memory stream instead of file stream\n"
+	               "  -split-pnm\n"
+	               "    Split output components to different files when writing to PNM\n"
 	               "\n");
 /* UniPG>> */
 #ifdef USE_JPWL
@@ -284,7 +293,7 @@ static OPJ_BOOL parse_precision(const char* option, opj_decompress_parameters* p
 	
 	for(;;)
 	{
-		OPJ_UINT32 prec;
+		int prec;
 		char mode;
 		char comma;
 		int count;
@@ -302,7 +311,7 @@ static OPJ_BOOL parse_precision(const char* option, opj_decompress_parameters* p
 			count = 3;
 		}
 		if (count == 3) {
-			if (prec > 32U) {
+			if ((prec < 1) || (prec > 32)) {
 				fprintf(stderr,"Invalid precision %d in precision option %s\n", prec, option);
 				l_result = OPJ_FALSE;
 				break;
@@ -345,7 +354,7 @@ static OPJ_BOOL parse_precision(const char* option, opj_decompress_parameters* p
 				parameters->precision = l_new;
 			}
 			
-			parameters->precision[parameters->nb_precision].prec = prec;
+			parameters->precision[parameters->nb_precision].prec = (OPJ_UINT32)prec;
 			switch (mode) {
 				case 'C':
 					parameters->precision[parameters->nb_precision].mode = OPJ_PREC_MODE_CLIP;
@@ -539,11 +548,12 @@ int parse_cmdline_decoder(int argc, char **argv, opj_decompress_parameters *para
 	/* parse the command line */
 	int totlen, c;
 	opj_option_t long_option[]={
-		{"ImgDir",    REQ_ARG, NULL ,'y'},
-		{"OutFor",    REQ_ARG, NULL ,'O'},
-		{"force-rgb", NO_ARG,  &(parameters->force_rgb), 1},
-		{"upsample",  NO_ARG,  &(parameters->upsample),  1},
-		{"use-memory-stream", NO_ARG,  &(parameters->use_memory_stream), 1}
+		{"ImgDir",    REQ_ARG, NULL,'y'},
+		{"OutFor",    REQ_ARG, NULL,'O'},
+		{"force-rgb", NO_ARG,  NULL, 1},
+		{"upsample",  NO_ARG,  NULL, 1},
+		{"split-pnm", NO_ARG,  NULL, 1},
+		{"use-memory-stream", NO_ARG, NULL, 1}
 	};
 
 	const char optlist[] = "i:o:r:l:x:d:t:p:"
@@ -554,6 +564,12 @@ int parse_cmdline_decoder(int argc, char **argv, opj_decompress_parameters *para
 #endif /* USE_JPWL */
 /* <<UniPG */
             "h"		;
+
+	long_option[2].flag = &(parameters->force_rgb);
+	long_option[3].flag = &(parameters->upsample);
+	long_option[4].flag = &(parameters->split_pnm);
+	long_option[5].flag = &(parameters->use_memory_stream);
+	
 	totlen=sizeof(long_option);
 	opj_reset_options_reading();
 	img_fol->set_out_format = 0;
@@ -878,6 +894,30 @@ int parse_DA_values( char* inArg, unsigned int *DA_x0, unsigned int *DA_y0, unsi
 		*DA_x1 = (OPJ_UINT32)values[2]; *DA_y1 = (OPJ_UINT32)values[3];
 		return EXIT_SUCCESS;
 	}
+}
+
+OPJ_FLOAT64 opj_clock(void) {
+#ifdef _WIN32
+	/* _WIN32: use QueryPerformance (very accurate) */
+    LARGE_INTEGER freq , t ;
+    /* freq is the clock speed of the CPU */
+    QueryPerformanceFrequency(&freq) ;
+	/* cout << "freq = " << ((double) freq.QuadPart) << endl; */
+    /* t is the high resolution performance counter (see MSDN) */
+    QueryPerformanceCounter ( & t ) ;
+	return freq.QuadPart ? (t.QuadPart / (OPJ_FLOAT64)freq.QuadPart) : 0;
+#else
+	/* Unix or Linux: use resource usage */
+    struct rusage t;
+    OPJ_FLOAT64 procTime;
+    /* (1) Get the rusage data structure at this moment (man getrusage) */
+    getrusage(0,&t);
+    /* (2) What is the elapsed time ? - CPU time = User time + System time */
+	/* (2a) Get the seconds */
+    procTime = (OPJ_FLOAT64)(t.ru_utime.tv_sec + t.ru_stime.tv_sec);
+    /* (2b) More precisely! Get the microseconds part ! */
+    return ( procTime + (OPJ_FLOAT64)(t.ru_utime.tv_usec + t.ru_stime.tv_usec) * 1e-6 ) ;
+#endif
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1211,6 +1251,8 @@ int main(int argc, char **argv)
 	img_fol_t img_fol;
 	dircnt_t *dirptr = NULL;
   int failed = 0;
+  OPJ_FLOAT64 t, tCumulative = 0;
+  OPJ_UINT32 numDecompressedImages = 0;
 
 	/* set decoding parameters to default values */
 	set_default_parameters(&parameters);
@@ -1331,6 +1373,8 @@ int main(int argc, char **argv)
 		opj_set_warning_handler(l_codec, warning_callback,00);
 		opj_set_error_handler(l_codec, error_callback,00);
 
+		t = opj_clock();
+
 		/* Setup the decoder decoding parameters using user parameters */
 		if ( !opj_setup_decoder(l_codec, &(parameters.core)) ){
 			fprintf(stderr, "ERROR -> opj_decompress: failed to setup the decoder\n");
@@ -1399,6 +1443,9 @@ int main(int argc, char **argv)
 			}
 			fprintf(stdout, "tile %d is decoded!\n\n", parameters.tile_index);
 		}
+
+		tCumulative += opj_clock() - t;
+		numDecompressedImages++;
 
 		/* Close the byte stream */
 		opj_stream_destroy(l_stream);
@@ -1500,7 +1547,7 @@ int main(int argc, char **argv)
 		/* ------------------- */
 		switch (parameters.cod_format) {
 		case PXM_DFMT:			/* PNM PGM PPM */
-			if (imagetopnm(image, parameters.outfile)) {
+			if (imagetopnm(image, parameters.outfile, parameters.split_pnm)) {
                 fprintf(stderr,"[ERROR] Outfile %s not generated\n",parameters.outfile);
         failed = 1;
 			}
@@ -1602,6 +1649,9 @@ int main(int argc, char **argv)
 		if(failed) remove(parameters.outfile);
 	}
 	destroy_parameters(&parameters);
+	if (numDecompressedImages) {
+		fprintf(stdout, "decode time: %d ms\n", (int)( (tCumulative * 1000.0) / (OPJ_FLOAT64)numDecompressedImages));
+	}
 	return failed ? EXIT_FAILURE : EXIT_SUCCESS;
 }
 /*end main*/
